@@ -110,10 +110,12 @@ fn main() -> std::io::Result<()> {
             let v = wq.lock().unwrap();
             let completed = v.len();
             drop(v);
-            print!("{} / {} ({})\r", recvcount, total, completed);
+            print!("{} / {} ({})                     \r", recvcount, total, completed);
             io::stdout().flush().unwrap();
         }
     }
+
+    print!("\n");
 
     // Do thread cleanup here
     for th in thread_list {
