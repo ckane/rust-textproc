@@ -79,6 +79,7 @@ fn main() -> std::io::Result<()> {
                 loop {
                     let mut wq = work_queue_clone.lock().unwrap();
                     if (*wq).len() == 0 {
+                        drop(wq); // This will unlock the Mutex after we've localized the work data
                         break;
                     }
 
@@ -96,6 +97,9 @@ fn main() -> std::io::Result<()> {
             })
         );
     };
+
+    // Drop the original tx so it doesn't hold the receiver open
+    drop(tx);
 
     let mut recvcount = 0;
     let wq = Arc::clone(&work_queue);
