@@ -164,8 +164,14 @@ impl GotohInstance {
         //println!("{:?}", self.q_mat);
         //println!("{}", self);
 
-        max!(self.d_mat[self.width + (self.width + 1)*(self.height)],
+        let retv = max!(self.d_mat[self.width + (self.width + 1)*(self.height)],
              self.p_mat[self.width + (self.width + 1)*(self.height)],
-             self.q_mat[self.width + (self.width + 1)*(self.height)])
+             self.q_mat[self.width + (self.width + 1)*(self.height)]);
+
+        self.d_mat = vec![].into_boxed_slice();
+        self.p_mat = vec![].into_boxed_slice();
+        self.q_mat = vec![].into_boxed_slice();
+
+        retv
     }
 }
