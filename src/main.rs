@@ -98,12 +98,14 @@ fn main() -> std::io::Result<()> {
     };
 
     let mut recvcount = 0;
+    let wq = Arc::clone(&work_queue);
     for recvmsg in rx {
         mtx.update_by_index(recvmsg.col, recvmsg.row, recvmsg.val).unwrap();
         recvcount = recvcount + 1;
         if recvcount % 100 == 0 {
-            let wq = Arc::clone(&work_queue);
-            let completed = (*(wq.lock().unwrap())).len();
+            let v = wq.lock().unwrap();
+            let completed = v.len();
+            drop(v);
             print!("{} / {} ({})\r", recvcount, total, completed);
             io::stdout().flush().unwrap();
         }
