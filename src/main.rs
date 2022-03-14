@@ -1,6 +1,6 @@
 use min_max::*;
 use std::fs::File;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::io::{self, Write, BufReader, BufRead};
 use std::sync::mpsc;
 use std::thread;
@@ -43,67 +43,68 @@ fn main() -> std::io::Result<()> {
 
     let entry_count = mtx.entries_len();
 
-    write!(output_file, "algo\tsig_name\tsig_len\t");
+    write!(output_file, "algo\tsig_name\tsig_len\t").unwrap();
+
+    let mut work: Vec<Vec<usize>> = vec![];
 
     for i in 0..entry_count {
         match mtx.get_entry(i) {
             Ok(e) => {
-                write!(output_file, "{}-{}\t", e.module, e.symbol);
+                write!(output_file, "{}-{}\t", e.module, e.symbol).unwrap();
+                for j in 0..entry_count {
+                    work.push(vec![i, j]);
+                };
             },
             Err(_) => {
             },
         };
     }
 
-    write!(output_file, "\n");
+    write!(output_file, "\n").unwrap();
 
     let (tx, rx) = mpsc::channel();
     let mut thread_list = vec![];
-    const nthreads: u16 = 48;
+    let work_queue = Arc::new(Mutex::new(work));
+    const NTHREADS: u16 = 24;
 
-    for tindex in 0..nthreads {
+    for tindex in 0..NTHREADS {
         // Gets a clone()d vec of the entries
         let entries = mtx.get_entries();
 
         let tx_clone = tx.clone();
+        let work_queue_clone = Arc::clone(&work_queue);
         thread_list.push(
             thread::spawn(move || {
                 let mut gotoh_compare = gotoh::GotohInstance::new(10, 4, 10);
-                let step_size = entries.len() / nthreads as usize;
-                let start_pos = step_size * tindex as usize;
-                let this_set = if tindex == nthreads - 1 {
-                    match entries.len() % step_size {
-                        0 => {
-                            step_size
-                        },
-                        _ => {
-                            entries.len() % step_size
-                        }
+                loop {
+                    let mut wq = work_queue_clone.lock().unwrap();
+                    if (*wq).len() == 0 {
+                        break;
                     }
-                } else {
-                    step_size
-                };
 
-                for j in start_pos..(start_pos + this_set) {
-                    for i in 0..entries.len() {
-                        let v = gotoh_compare.init(&entries[i].sig, &entries[j].sig);
-                        let maxlen = max!(entries[i].sig.len(), entries[j].sig.len()) as f32;
-                        let minv = -maxlen * 1.;
-                        let res = ((v as f32) - 10.*minv) / (10.*maxlen*2.);
+                    let work_item = (*wq).pop().unwrap();
 
-                        tx_clone.send(WorkResult {row: j, col: i, val: res}).unwrap();
-                    };
+                    drop(wq); // This will unlock the Mutex after we've localized the work data
+
+                    let v = gotoh_compare.init(&entries[work_item[0]].sig, &entries[work_item[1]].sig);
+                    let maxlen = max!(entries[work_item[0]].sig.len(), entries[work_item[1]].sig.len()) as f32;
+                    let minv = -maxlen * 1.;
+                    let res = ((v as f32) - 10.*minv) / (10.*maxlen*2.);
+
+                    tx_clone.send(WorkResult {row: work_item[1], col: work_item[0], val: res}).unwrap();
                 };
             })
         );
-    }
+    };
 
     let mut recvcount = 0;
     for recvmsg in rx {
         mtx.update_by_index(recvmsg.col, recvmsg.row, recvmsg.val).unwrap();
         recvcount = recvcount + 1;
         if recvcount % 100 == 0 {
-            print!("{} / {}\r", recvcount, total);
+            let wq = Arc::clone(&work_queue);
+            let completed = (*(wq.lock().unwrap())).len();
+            print!("{} / {} ({})\r", recvcount, total, completed);
             io::stdout().flush().unwrap();
         }
     }
