@@ -75,7 +75,7 @@ fn main() -> std::io::Result<()> {
         let work_queue_clone = Arc::clone(&work_queue);
         thread_list.push(
             thread::spawn(move || {
-                let mut gotoh_compare = gotoh::GotohInstance::new(10, 4, 10);
+                let mut gotoh_compare = gotoh::GotohInstance::new(1000, 100, 1000);
                 loop {
                     let mut wq = work_queue_clone.lock().unwrap();
                     if (*wq).len() == 0 {
@@ -87,10 +87,9 @@ fn main() -> std::io::Result<()> {
 
                     drop(wq); // This will unlock the Mutex after we've localized the work data
 
-                    let v = gotoh_compare.init(&entries[work_item[0]].sig, &entries[work_item[1]].sig);
-                    let maxlen = max!(entries[work_item[0]].sig.len(), entries[work_item[1]].sig.len()) as f32;
-                    let minv = -maxlen * 1.;
-                    let res = ((v as f32) - 10.*minv) / (10.*maxlen*2.);
+                    let v = /*(maxlen * 1000.) as isize - */gotoh_compare.init(&entries[work_item[0]].sig, &entries[work_item[1]].sig);
+                    let minlen = min!(entries[work_item[0]].sig.len(), entries[work_item[1]].sig.len()) as f32;
+                    let res = ((v as f32) + 1000.*minlen) / (1000.*minlen*2.);
 
                     tx_clone.send(WorkResult {row: work_item[1], col: work_item[0], val: res}).unwrap();
                 };
