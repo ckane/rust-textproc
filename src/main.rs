@@ -67,7 +67,7 @@ fn main() -> std::io::Result<()> {
     let work_queue = Arc::new(Mutex::new(work));
     const NTHREADS: u16 = 24;
 
-    for tindex in 0..NTHREADS {
+    for _tindex in 0..NTHREADS {
         // Gets a clone()d vec of the entries
         let entries = mtx.get_entries();
 
